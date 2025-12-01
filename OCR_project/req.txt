@@ -1,0 +1,46 @@
+############################################################
+# IMPORTANT: DO NOT list torch or torchvision in this file.
+#
+# Azure ML already provides:
+#   torch==2.9.1 (CUDA 12.8)
+#   torchvision==0.24.1+cu128
+#
+# If you list torch/torchvision here, pip will override them
+# with CPU wheels and BREAK CUDA support on Azure ML.
+#
+# For local development:
+#   You MUST install PyTorch manually depending on your GPU:
+#
+#   Example (Linux, CUDA 12.1+):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#
+#   Example (Linux, CUDA 12.4 / 12.5 / 12.8):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu*
+#
+#   Example (CPU only):
+#     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+# DO NOT specify torch in requirements.txt for cross-platform
+# use — it causes environment breakage on Azure ML and local machines.
+############################################################
+
+
+############ Core dependencies for OlmOCR & Qwen2.5-VL ############
+
+transformers==4.57.3      # Required for Qwen2.5/VL and OlmOCR models
+accelerate==1.12.0        # Mandatory for device_map="auto" and sharded loading
+tokenizers==0.22.1        # Compatible with transformers 4.57.3
+sentencepiece==0.2.1      # Needed for many LLM/VLM tokenizer models
+safetensors==0.7.0         # Faster and safer model weight loading
+
+############ Image, I/O, misc utilities ############
+
+pillow>=10.0.0            # Image loading for VLM inputs
+tqdm>=4.67.1              # Progress bars (used internally by HF)
+regex>=2025.11.3          # Required for tokenizer operations
+numpy>=2.3.5              # Needed by transformers / HF
+fsspec>=2025.10.0         # Filesystem abstraction for HF cache
+requests>=2.32.5          # For model downloading (when not cached)
+PyYAML>=6.0.3             # Config loading for HF models
+packaging>=25.0           # Version parsing utilities
+
