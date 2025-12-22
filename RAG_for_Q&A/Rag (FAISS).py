@@ -1,23 +1,25 @@
-from dotenv import load_dotenv
-import os
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_classic.chains import RetrievalQA
+#from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import DistanceStrategy
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import PGVector
-from langchain_community.vectorstores import DistanceStrategy
+from langchain_community.vectorstores import FAISS
+from langchain_classic.chains import RetrievalQA
 from langchain_qdrant import QdrantVectorStore
-import qdrant_client
-#from langchain_community.embeddings import HuggingFaceEmbeddings
-
-
 from langchain_openai import AzureChatOpenAI
+from dotenv import load_dotenv
+import qdrant_client
 import fitz
+import os
 
-endpoint = "https://ds-text-to-sql-bot.openai.azure.com/"
-deployment_name = "gpt-5-mini-murad"
-api_key = "7jARVwsr7Hej0cpt0xu7Z5vAqd0zhj9KGQkKluYtELZoTwiQ6OedJQQJ99BIACHYHv6XJ3w3AAABACOGwQfZ"
-api_version = "2025-04-01-preview"
+load_dotenv()
+
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+api_version = os.getenv("AZURE_OPENAI_API_VERSION")
+deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+deployment_name_fallback = os.getenv("AZURE_OPENAI_DEPLOYMENT_FALLBACK")
+api_version_fallback = os.getenv("AZURE_OPENAI_API_VERSION_FALLBACK")
 
 # Load environment variables
 doc = fitz.open("FAQ.pdf")
@@ -64,7 +66,7 @@ llm = AzureChatOpenAI(
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 system_prompt = SystemMessagePromptTemplate.from_template(
-    "You are the AI assistant of Birmarket support department.\n"
+    "You are the AI assistant of Microsoft support department.\n"
     "Answer ONLY using facts strictly from the provided context.\n"
     "If the answer is not in the context, reply exactly: 'I do not know, talk with support team'.\n"
     "Determine the user's language from their query.\n"
@@ -85,7 +87,7 @@ qa_chain = RetrievalQA.from_chain_type(
     chain_type_kwargs={"prompt": prompt})
 
 # Example query
-query = "Geri qaytarma şərtləri nədir?"
+query = "What is Microsoft?"
 response = qa_chain.invoke({"query": query})
 
 # Print the response
