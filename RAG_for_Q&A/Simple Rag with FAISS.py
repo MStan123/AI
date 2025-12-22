@@ -1,5 +1,4 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-#from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import DistanceStrategy
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import PGVector
