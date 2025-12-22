@@ -193,7 +193,7 @@ def answer_query(query: str):
         {
             "role": "system",
             "content":
-                "You are the AI assistant of Birmarket support department.\n"
+                "You are the AI assistant of Microsoft support department.\n"
                 "Answer ONLY using facts strictly from the provided context.\n"
                 "If you not found any information say I don't know anything, call to our support.\n"
                 "Do NOT invent information.\n"
@@ -203,7 +203,7 @@ def answer_query(query: str):
         },
         {
             "role": "user",
-            "content": f"Контекст:\n{context}\n\nВопрос: {query}"
+            "content": f"Context:\n{context}\n\nQuestion: {query}"
         }
     ]
 
@@ -220,7 +220,7 @@ def answer_query(query: str):
 # 8. RUN QUERY
 # --------------------------------------------------------------
 
-query = "Kuryer ilə çatdırılma"
+query = "What is Microsoft"
 
 start = time.perf_counter()
 response, docs = answer_query(query)
