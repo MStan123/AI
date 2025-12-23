@@ -1,23 +1,23 @@
 from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_community.document_compressors import FlashrankRerank
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from qdrant_client.models import VectorParams, Distance
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.retrievers import BaseRetriever
 from langchain_qdrant import QdrantVectorStore
 from langchain_core.documents import Document
 from langchain_openai import AzureChatOpenAI
-from dotenv import load_dotenv
-from pathlib import Path
-from diskcache import Cache
 from dataclasses import dataclass
-import hashlib
+from dotenv import load_dotenv
+from diskcache import Cache
+from pathlib import Path
+from typing import List
 import qdrant_client
+import hashlib
 import json
 import time
 import math
 import os
-from langchain_core.retrievers import BaseRetriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from typing import List
 
 cache = Cache("./llm_cache")
 
@@ -31,7 +31,7 @@ deployment_name_fallback = os.getenv("AZURE_OPENAI_DEPLOYMENT_FALLBACK")
 api_version_fallback = os.getenv("AZURE_OPENAI_API_VERSION_FALLBACK")
 
 # --------------------------------------------------------------
-# 1. ЗАГРУЗКА ГЛАВНОГО ИНДЕКСА
+# 1. JSON LOADING
 # --------------------------------------------------------------
 with open("index.json", 'r', encoding='utf-8') as f:
     index_data = json.load(f)
@@ -43,7 +43,7 @@ embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
 )
 # --------------------------------------------------------------
-# 3. СОЗДАЁМ ДОКУМЕНТЫ ИЗ САММАРИ
+# 3. SUMMARY DOCS
 # --------------------------------------------------------------
 summary_documents = []
 for i, chunk_info in enumerate(index_data["chunks"]):
@@ -123,26 +123,12 @@ fallback_llm = AzureChatOpenAI(
     timeout=30.0
 )
 
-# --------------------------------------------------------------
-# 6. COST STATS
-# --------------------------------------------------------------
-
-@dataclass
-class CostStats:
-    llm_calls: int = 0
-    cache_hits: int = 0
-    spent_tokens: int = 0
-    saved_tokens: int = 0
-
-
-stats = CostStats()
-
 def make_cache_key(query: str, context: str) -> str:
     raw = (query.strip().lower() + context).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 # --------------------------------------------------------------
-# 7. RAG ФУНКЦИЯ
+# 7. RAG FUNCTION
 # --------------------------------------------------------------
 def answer_query(query: str):
     # Этап 1: retrieve релевантные файлы через саммари
@@ -222,7 +208,6 @@ def answer_query(query: str):
     except Exception:
         response = fallback_llm.invoke(messages)
 
-    # Этап 7: подсчёт токенов
     usage = response.response_metadata.get("usage", {})
     prompt_tokens = usage.get("prompt_tokens", 0)
     completion_tokens = usage.get("completion_tokens", 0)
@@ -232,7 +217,6 @@ def answer_query(query: str):
 
     stats.spent_tokens += total_tokens
 
-    # Этап 8: сохраняем в кэш
     cache.set(
         cache_key,
         {
@@ -379,39 +363,11 @@ def print_sources(docs):
         print(f"--- Chunk {i} ---")
         print("Metadata:", doc.metadata)
         print("Text:", doc.page_content[:300], "...\n")
-
-def print_cost_report():
-    total_queries = stats.llm_calls + stats.cache_hits
-    potential_tokens = stats.spent_tokens + stats.saved_tokens
-
-    print("\n💰 COST REPORT")
-    print(f"Total queries:  {total_queries}")
-    print(f"LLM calls:      {stats.llm_calls}")
-    print(f"Cache hits:     {stats.cache_hits}")
-    if total_queries > 0:
-        hit_rate = (stats.cache_hits / total_queries) * 100
-        print(f"Cache hit rate: {hit_rate:.1f}%")
-    print(f"Spent tokens:   {stats.spent_tokens}")
-    print(f"Saved tokens:   {stats.saved_tokens}")
-    print(f"Potential tokens without cache: {potential_tokens}")
-    if potential_tokens > 0:
-        savings_percent = (stats.saved_tokens / potential_tokens) * 100
-        print(f"Token savings:  {savings_percent:.1f}%")
-
-    # Пример денежной экономии (Azure OpenAI GPT-4o на декабрь 2025 — ориентировочно)
-    # Подставь свои актуальные цены: input $ per 1k, output $ per 1k
-    PRICE_INPUT = 0.00025 / 1000   # $0.25 / 1M input tokens — пример для GPT-4o
-    PRICE_OUTPUT = 0.000025 / 1000  # $0.025 / 1M output tokens — пример
-    approx_cost_spent = stats.spent_tokens * ((PRICE_INPUT + PRICE_OUTPUT) / 2)
-    approx_cost_saved = stats.saved_tokens * ((PRICE_INPUT + PRICE_OUTPUT) / 2)
-    print(f"\nApproximate cost spent:  ${approx_cost_spent:.4f}")
-    print(f"Approximate cost saved:  ${approx_cost_saved:.4f}")
-    print(f"Total possible cost:     ${ (approx_cost_spent + approx_cost_saved):.4f}")
-
+        
 # --------------------------------------------------------------
 # 9. RUN QUERY & METRICS
 # --------------------------------------------------------------
-query = "Salam. Məhsul sifariş etmişəm, amma kuryerə zəng vuranda telefonu götürmür. Nə edim?"
+query = "What is Microsoft?"
 start = time.perf_counter()
 
 response, docs, selected_files = answer_query(query)
@@ -427,17 +383,16 @@ print(f"\nElapsed time: {elapsed:.2f} sec")
 
 # ------------------ EVALUATION ------------------
 eval_dataset = [
-    {"query": "Birmarket nədir?", "relevant_chunks": [1]},
-    {"query": "Birmarket-də hansı ödəniş üsulları mövcuddur?", "relevant_chunks": [5, 6, 7]},
-    {"query": "Kredit şərtləriniz nədir?", "relevant_chunks": [11, 12, 13]},
-    {"query": "Bonus üzrə kontekstdə olan bütün məlumatları ver", "relevant_chunks": [10, 43, 44, 45, 46, 47, 49]},
+    {"query": "YOUR QUERY", "relevant_chunks": [1]},
+    {"query": "YOUR QUERY", "relevant_chunks": [5, 6, 7]}
 ]
 
+'''
 print("\n" + "="*60)
 print("STARTING EVALUATION OF TWO-STAGE RETRIEVAL")
 print("="*60)
 
-'''eval_results = evaluate_retriever(eval_dataset, summary_retriever, compressor)
+eval_results = evaluate_retriever(eval_dataset, summary_retriever, compressor)
 
 for r in eval_results:
     print("\nQuery:", r["query"])
@@ -450,4 +405,3 @@ for r in eval_results:
 print("\n========== RERANKED DOCUMENTS (FlashRank) ==========")
 print_sources(docs)
 '''
-print_cost_report()
