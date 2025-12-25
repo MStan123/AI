@@ -284,7 +284,7 @@ def answer_query(query: str):
         {
             "role": "system",
             "content": (
-        "You are a helpful AI assistant in the Birmarket support department.\n\n"
+        "You are a helpful AI assistant in the support department.\n\n"
         "RULES:\n"
         "- Answer ONLY based on the provided context. NEVER invent or guess information.\n"
         "- The context is in Azerbaijani language.\n"
@@ -324,7 +324,7 @@ def answer_query(query: str):
 
 # --------------------------------------------------------------
 if __name__ == "__main__":
-    query = "Здравствуйте. что такое BirBonus??"
+    query = "Your Query??"
 
     start = time.perf_counter()
     response, docs, selected_files = answer_query(query)
