@@ -14,7 +14,7 @@ import time
 import os
 from langchain_core.retrievers import BaseRetriever
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from langdetect import detect
 # ---------------------------
 load_dotenv()
 
@@ -94,21 +94,25 @@ class RAGSemanticCache:
         self.threshold = threshold
 
     def retrieve_cached_response(self, query: str):
-        """Возвращает Document с кэшированным ответом или None"""
-        results = self.vector_store.similarity_search(
+        query_lang = detect(query)
+        results = self.vector_store.similarity_search_with_score(
             query,
             k=1,
             score_threshold=self.threshold
         )
-        return results[0] if results else None
+        if results:
+            best, score = results[0]
+            if best.metadata.get("language") == query_lang:
+                return best
 
     def store_response(self, query: str, response: str, tokens: int):
-        """Сохраняет новый запрос и ответ в кэш"""
+        language = detect(query)
         doc = Document(
             page_content=query,  # эмбеддится именно запрос
             metadata={
                 "response": response,
-                "tokens": tokens
+                "tokens": tokens,
+                "language": language
             }
         )
         self.vector_store.add_documents([doc])
@@ -208,7 +212,7 @@ def hybrid_summary_search(query, top_k=25, rerank_top_n=15, category=None):
             deduplicated_docs.append(doc)
             seen.add(file_key)
 
-    # --- FlashRank reranking саммари ---
+    # --- FlashRank summary reranking ---
     if len(deduplicated_docs) > rerank_top_n:
         class SimpleRetriever(BaseRetriever):
             docs: list
@@ -228,11 +232,11 @@ def hybrid_summary_search(query, top_k=25, rerank_top_n=15, category=None):
 
 # --------------------------------------------------------------
 def answer_query(query: str):
-    # Этап 1: гибридный retrieval
+    # Step 1: Hybrid retrieval
     summary_docs = hybrid_summary_search(query, top_k=25, rerank_top_n=15)
     selected_files = [doc.metadata["file"] for doc in summary_docs]
 
-    # Этап 2: загрузка детальных файлов
+    # Step 2: file loading
     chunks_dir = Path("chunks")
     detailed_docs = []
     for file_name in selected_files:
@@ -324,7 +328,7 @@ def answer_query(query: str):
 
 # --------------------------------------------------------------
 if __name__ == "__main__":
-    query = "Your Query??"
+    query = "Your Query"
 
     start = time.perf_counter()
     response, docs, selected_files = answer_query(query)
