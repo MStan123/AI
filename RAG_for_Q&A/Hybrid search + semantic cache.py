@@ -29,7 +29,7 @@ deployment_name_fallback = os.getenv("AZURE_OPENAI_DEPLOYMENT_FALLBACK")
 api_version_fallback = os.getenv("AZURE_OPENAI_API_VERSION_FALLBACK")
 
 # --------------------------------------------------------------
-# 1. ЗАГРУЗКА ГЛАВНОГО ИНДЕКСА
+# 1. JSON DOWNLOADING
 # --------------------------------------------------------------
 with open("output1.json", 'r', encoding='utf-8') as f:
     index_data = json.load(f)
@@ -42,7 +42,7 @@ embeddings = HuggingFaceEmbeddings(
 )
 
 # --------------------------------------------------------------
-# 3. СОЗДАЁМ ДОКУМЕНТЫ ИЗ САММАРИ
+# 3. SUMMARY DOCS
 # --------------------------------------------------------------
 summary_documents = []
 for i, chunk_info in enumerate(index_data["chunks"]):
@@ -59,14 +59,14 @@ for i, chunk_info in enumerate(index_data["chunks"]):
     )
 
 # ---------------------------
-# BM25 подготовка
+# BM25
 # ---------------------------
 documents_texts = [doc.page_content for doc in summary_documents]
 vectorizer = TfidfVectorizer()
 X_sparse = vectorizer.fit_transform(documents_texts)
 
 # --------------------------------------------------------------
-# 4. SETUP QDRANT (основной индекс саммари)
+# 4. SETUP QDRANT 
 # --------------------------------------------------------------
 client = QdrantClient(url='http://localhost:6333', port=6333)
 collection_name = "summaries"
@@ -110,7 +110,6 @@ class RAGSemanticCache:
         self.threshold = threshold
 
     def retrieve_cached_response(self, query: str):
-        """Возвращает Document с кэшированным ответом или None"""
         query_lang = detect(query)
         results = self.vector_store.similarity_search_with_score(
             query,
@@ -125,7 +124,7 @@ class RAGSemanticCache:
     def store_response(self, query: str, response: str, tokens: int):
         language = detect(query)
         doc = Document(
-            page_content=query,  # эмбеддится именно запрос
+            page_content=query,  
             metadata={
                 "response": response,
                 "tokens": tokens,
@@ -183,7 +182,7 @@ class CostStats:
 stats = CostStats()
 
 # --------------------------------------------------------------
-# 8. Гибридный поиск BM25 + Qdrant
+# 8. HYBRID SEARCH BM25 + Qdrant
 # --------------------------------------------------------------
 def hybrid_summary_search(query, top_k=30, category=None):
     # --- BM25 ---
@@ -221,7 +220,6 @@ def hybrid_summary_search(query, top_k=30, category=None):
                 qdrant_docs.append(doc)
                 break
 
-    # --- Объединяем и уникализируем по файлу ---
     combined_docs = bm25_docs + qdrant_docs
     seen = set()
     final_docs = []
@@ -234,14 +232,12 @@ def hybrid_summary_search(query, top_k=30, category=None):
     return final_docs[:top_k]
 
 # --------------------------------------------------------------
-# 9. RAG ФУНКЦИЯ
+# 9. RAG FUNC
 # --------------------------------------------------------------
 def answer_query(query: str):
-    # Этап 1: гибридный retrieval
     summary_docs = hybrid_summary_search(query, top_k=30)
     selected_files = [doc.metadata["file"] for doc in summary_docs]
 
-    # Этап 2: загрузка детальных файлов
     chunks_dir = Path("chunks")
     detailed_docs = []
     for file_name in selected_files:
@@ -262,7 +258,7 @@ def answer_query(query: str):
     if not detailed_docs:
         return "No relevant information found.", [], selected_files
 
-    # Этап 3: Rerank через FlashRank
+    # Rerank through FlashRank
     class SimpleRetriever(BaseRetriever):
         docs: list
         def _get_relevant_documents(self, query: str, **kwargs):
@@ -275,11 +271,10 @@ def answer_query(query: str):
     )
     reranked_docs = compression_retriever.invoke(query)
 
-    # Этап 4: формируем контекст
     context = "\n\n".join(doc.page_content for doc in reranked_docs)
 
     # --------------------------------------------------
-    # Проверка семантического кэша
+    # Semantic cache
     # --------------------------------------------------
     cached_doc = semantic_cache.retrieve_cached_response(query)
     if cached_doc:
@@ -289,7 +284,7 @@ def answer_query(query: str):
         print("From Semantic Cache")
         return cached_doc.metadata["response"], reranked_docs, selected_files
 
-    # Если нет в кэше — идём в LLM
+    # If not in cache - go to LLM
     print("Request to Azure OpenAI")
     stats.llm_calls += 1
 
@@ -297,12 +292,12 @@ def answer_query(query: str):
         {
             "role": "system",
             "content": (
-                "You are a friendly and professional AI assistant for Birmarket customer support (an online marketplace in Azerbaijan).\n\n"
+                "You are a friendly and professional AI assistant for customer support.\n\n"
 
                 "MAIN RULES:\n"
-                "1. Answer ONLY based on the provided context if the question is about products, delivery, payment, returns, bonuses, customs, the Birmarket app, website, or related services.\n"
+                "1. Answer ONLY based on the provided context if the question is about products, delivery, payment, returns, bonuses, customs,   app, website, or related services.\n"
                 "2. If the context does not contain the information — honestly say: 'Unfortunately, I don't have exact information on this question. I recommend contacting our support team at ... or via the chat in the app.'\n"
-                "3. NEVER invent facts about Birmarket, prices, terms, product availability and etc.\n\n"
+                "3. NEVER invent facts about , prices, terms, product availability and etc.\n\n"
 
                 "ALLOWED GENERAL QUESTIONS (answer them naturally and kindly):\n"
                 "- Greetings (hi, salam, hello, good day, etc.)\n"
@@ -333,7 +328,6 @@ def answer_query(query: str):
     except Exception:
         response = fallback_llm.invoke(messages)
 
-    # Подсчёт токенов
     usage = response.response_metadata.get("usage", {})
     prompt_tokens = usage.get("prompt_tokens", 0)
     completion_tokens = usage.get("completion_tokens", 0)
@@ -343,9 +337,6 @@ def answer_query(query: str):
 
     stats.spent_tokens += total_tokens
 
-    # --------------------------------------------------
-    # Сохранение в семантический кэш
-    # --------------------------------------------------
     semantic_cache.store_response(query, response.content, total_tokens)
 
     return response.content, reranked_docs, selected_files
@@ -353,7 +344,7 @@ def answer_query(query: str):
 # --------------------------------------------------------------
 # 10. RUN QUERY & METRICS
 # --------------------------------------------------------------
-query = "BirBonus nedir????"
+query = "YOUR QUERY????"
 
 start = time.perf_counter()
 response, docs, selected_files = answer_query(query)
@@ -366,7 +357,7 @@ print("\n========== ANSWER ==========")
 print(response)
 print(f"\nElapsed time: {elapsed:.2f} sec")
 
-# Статистика использования
+# STATISTICS
 print("\n--- STATS ---")
 print(f"LLM calls: {stats.llm_calls}")
 print(f"Cache hits: {stats.cache_hits}")
